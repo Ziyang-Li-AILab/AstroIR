@@ -64,9 +64,9 @@ class Trainer(object):
 
 
     def train(self):
-        criterion = torch.nn.L1Loss()
-        criterion = torch.nn.MSELoss()
-        # criterion = PhotometricLoss()
+        # criterion = torch.nn.L1Loss()
+        # criterion = torch.nn.MSELoss()
+        criterion = PhotometricLoss()
 
         with tqdm.tqdm(range(self.max_epoch), desc='Epoch:', smoothing=1) as pbar:
             min_loss = 1e9
@@ -89,6 +89,7 @@ class Trainer(object):
                     self.optimizer.step()
                     total_losses.append(loss.item())
 
+                # self.eval()
                 self.scheduler.step()
                 avg_loss = sum(total_losses) / len(total_losses)
 
@@ -96,51 +97,72 @@ class Trainer(object):
                     min_loss = avg_loss
                     torch.save(self.model.module.state_dict(), os.path.join(self.log_dir, f'best.pth'))
 
-                pbar.set_postfix(lr=self.optimizer.param_groups[0]['lr'], MSELoss=avg_loss)
+                pbar.set_postfix(lr=self.optimizer.param_groups[0]['lr'], PLLoss=avg_loss)
 
         pbar.close()
 
-    def eval(self, save_path="/ailab/user/liziyang/workspace/AstroIR/figs/", vis=False):
+    def eval(self, save_path="/home/bingxing2/ailab/scxlab0063/AstroIR/figs/", vis=False):
         model_name = self.log_dir
-        self.model.module.load_state_dict(torch.load(f"{model_name}/best.pth"))
-        criterion = PhotometricLoss()
+        # self.model.module.load_state_dict(torch.load(f"{model_name}/best.pth"))
+        self.model.module.load_state_dict(torch.load(f"/home/bingxing2/ailab/scxlab0063/AstroIR/log/SwinIR_PL/best.pth"))
+        criterion1 = PhotometricLoss()
         device = "cuda"
         PSNR_list = []
         SSIM_list = []
         TFE_list = []
         with torch.no_grad():
             # batch = 1
-            for idx, (origin, gt, (meann, stdd)) in enumerate(tqdm.tqdm(self.evalloader, desc="Evaluating")):
-                # origin = origin.to(device)
+            for idx, (origin, gt, (meann, stdd)) in enumerate(self.evalloader):
+                origin = origin.to(device)
 
-                pred = origin.clone()
-                pred = pred * stdd + meann
+                # pred = origin.clone()
 
-                # pred = self.model(origin)
-                # pred = pred.to("cpu") * stdd + meann
+                pred = self.model(origin)
+                pred = pred.to("cpu") * stdd + meann
                 gt = gt * stdd + meann
 
-                TFE_list.append(criterion(pred, gt))
+                origin =  origin.to("cpu") * stdd + meann  # 画图用的，随时可以删除
+
+                # TFE_list.append(criterion1(pred, gt))
                 PSNR_list.append(self.calculate_psnr(pred, gt))
                 SSIM_list.append(self.calculate_ssim(pred, gt))
 
-                tqdm.tqdm.write(f"Batch {idx}: PSNR={PSNR_list[idx]:.4f}, SSIM={SSIM_list[idx]:.4f}, TFE={TFE_list[idx]:.4f}")
+                # tqdm.tqdm.write(f"Batch {idx}: PSNR={PSNR_list[idx]:.4f}, SSIM={SSIM_list[idx]:.4f}, TFE={TFE_list[idx]:.4f}")
 
-                if vis:
-                    fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(10, 5))
+                if vis and idx%5==0:
+                    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+                    axes[2].imshow(self.fits_vis(pred[0, 0, :, :]), cmap='gray')
+                    axes[2].axis('off')  # Hide the axes
+                    axes[2].set_title('Pred')
+                    axes[1].imshow(self.fits_vis(gt[0, 0, :, :]), cmap='gray')
+                    axes[1].axis('off')  # Hide the axes
+                    axes[1].set_title('Ground Truth')
+                    axes[0].imshow(self.fits_vis(origin[0, 0, :, :]), cmap='gray')
+                    axes[0].axis('off')  # Hide the axes
+                    axes[0].set_title('Input')
+                    plt.tight_layout()
+                    plt.savefig(save_path + f'zscale/{model_name.split("/")[-1]}{idx}.png', dpi=600, bbox_inches='tight')
+                    plt.show()
+                    plt.close()
+
+                    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(15, 5))
+                    axes[2].imshow(pred[0, 0, :, :], cmap='gray')
+                    axes[2].axis('off')  # Hide the axes
+                    axes[2].set_title('Pred')
                     axes[1].imshow(gt[0, 0, :, :], cmap='gray')
                     axes[1].axis('off')  # Hide the axes
                     axes[1].set_title('Ground Truth')
-                    axes[0].imshow(pred[0, 0, :, :], cmap='gray')
+                    axes[0].imshow(origin[0, 0, : :], cmap='gray')
                     axes[0].axis('off')  # Hide the axes
-                    axes[0].set_title('Prediction')
+                    axes[0].set_title('Input')
                     plt.tight_layout()
-                    plt.savefig(save_path + f'{model_name.split("/")[-1]}{idx}.png', dpi=600, bbox_inches='tight')
+                    plt.savefig(save_path + f'withoutZScale/{model_name.split("/")[-1]}{idx}.png', dpi=600, bbox_inches='tight')
                     plt.show()
+                    plt.close()
 
         print(model_name, "---- PSNR:",np.mean(PSNR_list),  "    SSIM:", np.mean(SSIM_list),  "    TFE:", np.nanmean(TFE_list))
 
-        sys.exit(0)
+        # sys.exit(0)
 
     def fits_vis(self, ori_array):
         z = ZScaleInterval(n_samples=1000, contrast=0.25)
