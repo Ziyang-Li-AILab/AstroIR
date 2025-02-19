@@ -48,5 +48,5 @@ torchrun \
      --nproc_per_node="${NPROC_PER_NODE}" \
      --master_addr="${MASTER_ADDR}" \
      --master_port="${MASTER_PORT}" \
-     /home/bingxing2/ailab/scxlab0063/AstroIR/tools/trainval.py ${CONFIG} --launcher="slurm" --log_dir='SwinIR_MSE' >> "${OUTPUT_LOG}" 2>&1
+     /home/bingxing2/ailab/scxlab0063/AstroIR/tools/trainval.py ${CONFIG} --launcher="slurm" --log_dir='HAT_PL' >> "${OUTPUT_LOG}" 2>&1
 
