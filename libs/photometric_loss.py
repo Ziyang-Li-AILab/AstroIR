@@ -62,9 +62,9 @@ class PhotometricLoss(nn.Module):
     def __init__(self):
         super(PhotometricLoss, self).__init__()
         self.l1 = nn.L1Loss()
+        self.l2 = nn.MSELoss()
 
     def forward(self, pred, gt):
-        l1 = self.l1(pred, gt)
         pred = pred.squeeze()
         gt = gt.squeeze()
 
@@ -82,14 +82,11 @@ class PhotometricLoss(nn.Module):
         mask = find_peaks_vectorized(data, threshold, fwhm_guess)
 
         # photometry
-        phot1 = torch.sum(data * mask)
-        phot2 = torch.sum(pred * mask)
-        # l2 = self.l1(pred * mask, data * mask)
-
-        # photometry
-        loss = torch.sum(torch.abs(phot1 - phot2))
-        loss = torch.sum(torch.abs(phot1 - phot2)) / torch.sum(torch.abs(phot1))
-
+        phot1 = data * mask
+        phot2 = pred * mask
+        loss = self.l2(phot1, phot2) + self.l1(data, pred)
         return loss
-        # return 0.5 * l2 + 0.5 * l1
+
+        # 这个是评估那个tfe用的，后续会更新一下代码写法，现在在跑模型权重就暂时没动
+        # loss = torch.sum(torch.abs(phot1 - phot2)) / torch.sum(torch.abs(phot1))
 
